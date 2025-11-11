@@ -61,4 +61,4 @@ Key technical challenge: Refactor the coordinate system to be global and dynamic
 - [x] Update click logic to check distance from playerI/J
 - [x] Increase win score to 32
 - [x] push and check GitHub Pages deployment
-- [ ] make final commit "(D3.b complete)"
+- [x] make final commit "(D3.b complete)"

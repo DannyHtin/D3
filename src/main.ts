@@ -116,7 +116,6 @@ function updateStatusPanel() {
 }
 
 function removeCell(key: string) {
-  gridCells.delete(key);
   const visual = cellVisuals.get(key);
   if (visual) {
     visual.remove();
@@ -167,6 +166,7 @@ function onCellClick(key: string, i: number, j: number) {
   if (playerInventory === null) {
     if (cellValue) {
       playerInventory = cellValue;
+      gridCells.delete(key);
       removeCell(key);
     }
   } // Case 2: Inventory has a token
@@ -175,10 +175,11 @@ function onCellClick(key: string, i: number, j: number) {
       // Cell has a token: Try to CRAFT
       if (cellValue === playerInventory) {
         const newValue = cellValue * 2;
-        gridCells.set(key, newValue); // Update state
         playerInventory = null; // Empty inventory
+
         removeCell(key); // Remove old visual
-        renderCell(key, i, j, newValue); // Render new one
+        gridCells.set(key, newValue); // Set new state
+        renderCell(key, i, j, newValue); // Render new visual
 
         if (newValue >= WIN_SCORE) {
           gameWon = true;
@@ -205,29 +206,36 @@ function onCellClick(key: string, i: number, j: number) {
 function updateMap() {
   const bounds = map.getBounds();
 
-  // 1. Despawn (Memoryless): Remove cells outside the new view
-  for (const key of cellVisuals.keys()) {
-    const [iStr, jStr] = key.split(",");
-    const i = parseInt(iStr);
-    const j = parseInt(jStr);
-    const cellBounds = cellToBounds(i, j);
-
-    if (!bounds.intersects(cellBounds)) {
-      removeCell(key);
-    }
-  }
-
-  // 2. Spawn: Add new cells inside the view
+  // 1. Calculate the *exact* range of visible cells
   const iMin = Math.floor(bounds.getSouth() / TILE_DEGREES);
   const iMax = Math.ceil(bounds.getNorth() / TILE_DEGREES);
   const jMin = Math.floor(bounds.getWest() / TILE_DEGREES);
   const jMax = Math.ceil(bounds.getEast() / TILE_DEGREES);
 
+  // 2. Despawn (Memoryless): Remove cells *outside* this exact range
+  const keysToRemove: string[] = [];
+  for (const key of cellVisuals.keys()) {
+    const [iStr, jStr] = key.split(",");
+    const i = parseInt(iStr);
+    const j = parseInt(jStr);
+
+    // If the cell's (i, j) is outside the visible range, delete it
+    if (i < iMin || i > iMax || j < jMin || j > jMax) {
+      keysToRemove.push(key);
+    }
+  }
+  // Now, safely remove them
+  for (const key of keysToRemove) {
+    gridCells.delete(key);
+    removeCell(key);
+  }
+
+  // 3. Spawn: Add new cells *inside* this exact range
   for (let i = iMin; i <= iMax; i++) {
     for (let j = jMin; j <= jMax; j++) {
       const key = `${i},${j}`;
 
-      // Skip if this cell already exists (from spawn or player action)
+      // Skip if this cell already exists (e.g., our "2" token)
       if (gridCells.has(key)) {
         continue;
       }
