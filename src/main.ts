@@ -14,7 +14,6 @@ import luck from "./_luck.ts";
 // ===
 // DOM SETUP
 // ===
-// We create and append the three main DOM elements for our game.
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
 document.body.append(controlPanelDiv);
@@ -38,20 +37,15 @@ const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4; // Approx 10m x 10m
 const INTERACTION_RADIUS = 3; // Can interact 3 cells away
 const SPAWN_PROBABILITY = 0.2; // 20% chance for a cell to have a token
-const WIN_SCORE = 16; // Craft a token of this value to win
+const WIN_SCORE = 32; // Increased win score for D3.b
 
 // ===
 // MAP SETUP
 // ===
+// Map is now unlocked (no min/max zoom, scroll/drag enabled)
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
   zoom: GAMEPLAY_ZOOM_LEVEL,
-  minZoom: GAMEPLAY_ZOOM_LEVEL,
-  maxZoom: GAMEPLAY_ZOOM_LEVEL,
-  zoomControl: false,
-  scrollWheelZoom: false, // Core mechanic: map is fixed
-  doubleClickZoom: false,
-  dragging: false,
 });
 
 leaflet
@@ -62,26 +56,53 @@ leaflet
   })
   .addTo(map);
 
-// Player marker (visual only, logic is based on (0,0) cell)
-leaflet.marker(CLASSROOM_LATLNG).addTo(map).bindTooltip("You are here!");
+// ===
+// HELPER FUNCTIONS (COORDINATES)
+// ===
+
+/**
+ * Converts a Leaflet LatLng object to its corresponding cell (i, j) coordinates.
+ * Anchored at (0, 0) (Null Island).
+ */
+function latLngToCell(latLng: leaflet.LatLng) {
+  const i = Math.floor(latLng.lat / TILE_DEGREES);
+  const j = Math.floor(latLng.lng / TILE_DEGREES);
+  return { i, j };
+}
+
+/**
+ * Converts cell (i, j) coordinates to Leaflet LatLngBounds.
+ */
+function cellToBounds(i: number, j: number) {
+  const south = i * TILE_DEGREES;
+  const west = j * TILE_DEGREES;
+  const north = south + TILE_DEGREES;
+  const east = west + TILE_DEGREES;
+  return leaflet.latLngBounds([south, west], [north, east]);
+}
 
 // ===
 // GAME STATE
 // ===
-// We use Maps to store sparse data about the grid.
-// The key is a simple string "i,j" for the cell coordinates.
 let playerInventory: number | null = null;
 let gameWon = false;
-// Stores the token value for a given cell
 const gridCells = new Map<string, number>();
-// Stores the Leaflet layer (the rectangle visual) for a given cell
 const cellVisuals = new Map<string, leaflet.Layer>();
 
+// Player's cell coordinate (i, j)
+const initialPlayerCell = latLngToCell(CLASSROOM_LATLNG);
+let playerI = initialPlayerCell.i;
+let playerJ = initialPlayerCell.j;
+
+// Player marker (visual only)
+const playerMarker = leaflet.marker(CLASSROOM_LATLNG).addTo(map).bindTooltip(
+  "You are here!",
+);
+
 // ===
-// HELPER FUNCTIONS
+// HELPER FUNCTIONS (GAME)
 // ===
 
-/** Updates the status panel to reflect the player's inventory. */
 function updateStatusPanel() {
   if (gameWon) {
     statusPanelDiv.innerHTML = `Inventory: ${
@@ -94,51 +115,32 @@ function updateStatusPanel() {
   }</strong>`;
 }
 
-/** Removes a cell's token and its visual from the map. */
 function removeCell(key: string) {
   gridCells.delete(key);
   const visual = cellVisuals.get(key);
   if (visual) {
-    visual.remove(); // Remove from map
+    visual.remove();
     cellVisuals.delete(key);
   }
 }
 
-/**
- * Creates the visual rectangle for a cell and adds its click listener.
- * Assumes the token value is already in gridCells.
- */
 function renderCell(key: string, i: number, j: number, value: number) {
-  // 1. Calculate Leaflet bounds
-  const bounds = leaflet.latLngBounds([
-    [
-      CLASSROOM_LATLNG.lat + i * TILE_DEGREES,
-      CLASSROOM_LATLNG.lng + j * TILE_DEGREES,
-    ],
-    [
-      CLASSROOM_LATLNG.lat + (i + 1) * TILE_DEGREES,
-      CLASSROOM_LATLNG.lng + (j + 1) * TILE_DEGREES,
-    ],
-  ]);
+  // Use the global coordinate helper
+  const bounds = cellToBounds(i, j);
 
-  // 2. Create rectangle
   const rect = leaflet.rectangle(bounds, {
     color: "#3388ff",
     weight: 1,
     fillOpacity: 0.1,
   });
 
-  // 3. Bind tooltip (visible without click)
   rect.bindTooltip(value.toString(), {
     permanent: true,
     direction: "center",
     className: "cell-tooltip",
   });
 
-  // 4. Bind click listener
   rect.on("click", () => onCellClick(key, i, j));
-
-  // 5. Add to map and state
   rect.addTo(map);
   cellVisuals.set(key, rect);
 }
@@ -149,11 +151,12 @@ function renderCell(key: string, i: number, j: number, value: number) {
 
 /** Handles all logic when a player clicks a cell. */
 function onCellClick(key: string, i: number, j: number) {
-  if (gameWon) return; // Game is over
+  if (gameWon) return;
 
-  // 1. Check for interaction radius
-  const distance = Math.max(Math.abs(i), Math.abs(j));
-  if (distance > INTERACTION_RADIUS) {
+  // 1. Check for interaction radius (relative to player's i,j)
+  const distI = Math.abs(i - playerI);
+  const distJ = Math.abs(j - playerJ);
+  if (Math.max(distI, distJ) > INTERACTION_RADIUS) {
     alert("This cell is too far away to interact with.");
     return;
   }
@@ -163,91 +166,122 @@ function onCellClick(key: string, i: number, j: number) {
   // Case 1: Inventory is EMPTY
   if (playerInventory === null) {
     if (cellValue) {
-      // Pick up the token
       playerInventory = cellValue;
       removeCell(key);
-      console.log(`Picked up: ${cellValue}`);
-    } else {
-      // Clicked an empty cell with an empty inventory
-      console.log("Clicked an empty cell.");
     }
   } // Case 2: Inventory has a token
   else {
     if (cellValue) {
       // Cell has a token: Try to CRAFT
       if (cellValue === playerInventory) {
-        // Craft success!
         const newValue = cellValue * 2;
         gridCells.set(key, newValue); // Update state
         playerInventory = null; // Empty inventory
-
-        // Update visual
         removeCell(key); // Remove old visual
         renderCell(key, i, j, newValue); // Render new one
-        console.log(`Crafted: ${newValue}`);
 
-        // Win check
         if (newValue >= WIN_SCORE) {
           gameWon = true;
           alert(`You crafted a ${newValue} token! You win!`);
         }
       } else {
-        // Craft fail: different values
         alert("You must combine tokens of the same value.");
       }
     } else {
       // Cell is empty: PLACE token
       gridCells.set(key, playerInventory);
       renderCell(key, i, j, playerInventory);
-      console.log(`Placed: ${playerInventory}`);
-      playerInventory = null; // Empty inventory
+      playerInventory = null;
     }
   }
-
-  // Finally, update the UI
   updateStatusPanel();
 }
 
-/** Populates the map with deterministically spawned tokens. */
-function populateMap() {
+/**
+ * Main update loop.
+ * Called on 'moveend' (pan or scroll).
+ * Despawns off-screen cells and spawns new ones.
+ */
+function updateMap() {
   const bounds = map.getBounds();
-  const north = bounds.getNorth();
-  const south = bounds.getSouth();
-  const east = bounds.getEast();
-  const west = bounds.getWest();
 
-  // Calculate cell index range based on map bounds
-  const iMin = Math.floor((south - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
-  const iMax = Math.ceil((north - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
-  const jMin = Math.floor((west - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
-  const jMax = Math.ceil((east - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
+  // 1. Despawn (Memoryless): Remove cells outside the new view
+  for (const key of cellVisuals.keys()) {
+    const [iStr, jStr] = key.split(",");
+    const i = parseInt(iStr);
+    const j = parseInt(jStr);
+    const cellBounds = cellToBounds(i, j);
 
-  // Iterate over all visible cells
+    if (!bounds.intersects(cellBounds)) {
+      removeCell(key);
+    }
+  }
+
+  // 2. Spawn: Add new cells inside the view
+  const iMin = Math.floor(bounds.getSouth() / TILE_DEGREES);
+  const iMax = Math.ceil(bounds.getNorth() / TILE_DEGREES);
+  const jMin = Math.floor(bounds.getWest() / TILE_DEGREES);
+  const jMax = Math.ceil(bounds.getEast() / TILE_DEGREES);
+
   for (let i = iMin; i <= iMax; i++) {
     for (let j = jMin; j <= jMax; j++) {
       const key = `${i},${j}`;
 
-      // Skip if this cell has already been processed (e.g., player placed a token)
+      // Skip if this cell already exists (from spawn or player action)
       if (gridCells.has(key)) {
         continue;
       }
 
       // Use luck to determine if a token spawns here
-      const spawnLuck = luck(key);
-      if (spawnLuck < SPAWN_PROBABILITY) {
-        // Token spawns!
-        const value = 1; // All spawned tokens have value 1
-        gridCells.set(key, value);
-        renderCell(key, i, j, value);
+      if (luck(key) < SPAWN_PROBABILITY) {
+        gridCells.set(key, 1);
+        renderCell(key, i, j, 1);
       }
     }
   }
 }
 
+/**
+ * Handles player movement, updating state and panning the map.
+ */
+function movePlayer(di: number, dj: number) {
+  if (gameWon) return;
+
+  playerI += di;
+  playerJ += dj;
+
+  const playerCenter = cellToBounds(playerI, playerJ).getCenter();
+  playerMarker.setLatLng(playerCenter);
+  map.panTo(playerCenter);
+  // `updateMap()` will be called automatically by the 'moveend' event
+}
+
 // ===
-// INITIALIZATION
+// UI & INITIALIZATION
 // ===
-// The map's "moveend" event fires once on load because the map is fixed.
-// This is the perfect time to draw the initial grid.
-map.on("moveend", populateMap);
-updateStatusPanel(); // Show initial "Empty" inventory
+
+// Add movement buttons
+const northBtn = document.createElement("button");
+northBtn.innerHTML = "North";
+northBtn.onclick = () => movePlayer(1, 0);
+
+const southBtn = document.createElement("button");
+southBtn.innerHTML = "South";
+southBtn.onclick = () => movePlayer(-1, 0);
+
+const eastBtn = document.createElement("button");
+eastBtn.innerHTML = "East";
+eastBtn.onclick = () => movePlayer(0, 1);
+
+const westBtn = document.createElement("button");
+westBtn.innerHTML = "West";
+westBtn.onclick = () => movePlayer(0, -1);
+
+controlPanelDiv.append(northBtn, southBtn, eastBtn, westBtn);
+
+// Listen for map moves (pan, scroll, zoom) to update cells
+map.on("moveend", updateMap);
+
+// Initial setup
+updateStatusPanel();
+updateMap(); // Draw the first set of cells

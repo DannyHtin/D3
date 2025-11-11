@@ -40,6 +40,25 @@ Key technical challenge: Getting Leaflet to work with a grid of clickable cells 
 - [x] craft logic: if values don'T match, show an alert
 - [x] update the status panel to show current inventory
 - [x] check for win condition (e.g., crafted token >= 16) and show alert
-- [x] do a cleanup-only commit (remove console.logs, etc.)
 - [x] push and check GitHub Pages deployment
 - [x] make final commit
+
+## D3.b: Globe-spanning Gameplay
+
+Key technical challenge: Refactor the coordinate system to be global and dynamically load/unload cells as the map moves, creating an "infinite" world.
+
+### steps
+
+- [x] Refactor coords: Change anchor from classroom to (0,0) Null Island
+- [x] Create state for player's cell location (playerI, playerJ)
+- [x] Make helper functions: latLngToCell() and cellToBounds()
+- [x] Add movement buttons (N, S, E, W) to controlPanel
+- [x] Make buttons update playerI/J and pan the map
+- [x] Unlock map: Remove zoom/scroll/drag restrictions
+- [x] Listen to 'moveend' event to call a new updateMap function
+- [x] Implement cell "despawning" in updateMap (memoryless cells)
+- [x] Update updateMap to only draw new cells visible in bounds
+- [x] Update click logic to check distance from playerI/J
+- [x] Increase win score to 32
+- [x] push and check GitHub Pages deployment
+- [ ] make final commit "(D3.b complete)"
