@@ -171,8 +171,7 @@ function onCellClick(key: string, i: number, j: number) {
       // Clicked an empty cell with an empty inventory
       console.log("Clicked an empty cell.");
     }
-  }
-  // Case 2: Inventory has a token
+  } // Case 2: Inventory has a token
   else {
     if (cellValue) {
       // Cell has a token: Try to CRAFT
