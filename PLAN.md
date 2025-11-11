@@ -42,4 +42,4 @@ Key technical challenge: Getting Leaflet to work with a grid of clickable cells 
 - [x] check for win condition (e.g., crafted token >= 16) and show alert
 - [x] do a cleanup-only commit (remove console.logs, etc.)
 - [x] push and check GitHub Pages deployment
-- [ ] make final commit "(D3.a complete)"
+- [x] make final commit 
