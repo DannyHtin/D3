@@ -78,5 +78,5 @@ Key technical challenge: Make cells "remember" their state (like crafted tokens)
 - [x] Spawn logic: If `luck()` passes, save it to `gridCells` _once_ and draw it (Flyweight).
 - [x] Test: Craft a 4, scroll far away, scroll back, and confirm the 4 is still there.
 - [x] do a cleanup-only commit
-- [ ] push and check GitHub Pages deployment
-- [ ] make final commit "(D3.c complete)"
+- [x] push and check GitHub Pages deployment
+- [x] make final commit "(D3.c complete)"

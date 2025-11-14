@@ -50,11 +50,11 @@ const map = leaflet.map(mapDiv, {
 
 leaflet
   .tileLayer(
-    "[https://tile.openstreetmap.org/](https://tile.openstreetmap.org/){z}/{x}/{y}.png",
+    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     {
       maxZoom: 19,
       attribution:
-        '&copy; <a href="[http://www.openstreetmap.org/copyright](http://www.openstreetmap.org/copyright)">OpenStreetMap</a>',
+        '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     },
   )
   .addTo(map);
