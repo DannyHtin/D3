@@ -62,3 +62,21 @@ Key technical challenge: Refactor the coordinate system to be global and dynamic
 - [x] Increase win score to 32
 - [x] push and check GitHub Pages deployment
 - [x] make final commit "(D3.b complete)"
+
+## D3.c: Object persistence
+
+Key technical challenge: Make cells "remember" their state (like crafted tokens) even after scrolling off-screen, using the `gridCells` map as a Memento.
+
+### steps
+
+- [x] Modify `updateMap` to implement persistence (remove "memoryless" feature)
+- [x] Despawn logic: When cells go off-screen, _only_ remove their visual layer (`cellVisuals`).
+- [x] Despawn logic: **Do not** delete their data from `gridCells`. This makes `gridCells` our "Memento".
+- [x] Spawn/Redraw logic: When map moves, loop through visible cell range.
+- [x] Spawn logic: If a cell _is_ in `gridCells`, draw it (restoring from Memento).
+- [x] Spawn logic: If a cell is _not_ in `gridCells`, run `luck()`.
+- [x] Spawn logic: If `luck()` passes, save it to `gridCells` _once_ and draw it (Flyweight).
+- [x] Test: Craft a 4, scroll far away, scroll back, and confirm the 4 is still there.
+- [x] do a cleanup-only commit
+- [ ] push and check GitHub Pages deployment
+- [ ] make final commit "(D3.c complete)"

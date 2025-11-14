@@ -37,23 +37,26 @@ const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4; // Approx 10m x 10m
 const INTERACTION_RADIUS = 3; // Can interact 3 cells away
 const SPAWN_PROBABILITY = 0.2; // 20% chance for a cell to have a token
-const WIN_SCORE = 32; // Increased win score for D3.b
+const WIN_SCORE = 32;
+const SAVE_KEY = "tokenCrafterSave";
 
 // ===
 // MAP SETUP
 // ===
-// Map is now unlocked (no min/max zoom, scroll/drag enabled)
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
   zoom: GAMEPLAY_ZOOM_LEVEL,
 });
 
 leaflet
-  .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution:
-      '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  })
+  .tileLayer(
+    "[https://tile.openstreetmap.org/](https://tile.openstreetmap.org/){z}/{x}/{y}.png",
+    {
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="[http://www.openstreetmap.org/copyright](http://www.openstreetmap.org/copyright)">OpenStreetMap</a>',
+    },
+  )
   .addTo(map);
 
 // ===
@@ -86,7 +89,9 @@ function cellToBounds(i: number, j: number) {
 // ===
 let playerInventory: number | null = null;
 let gameWon = false;
-const gridCells = new Map<string, number>();
+// `gridCells` is our "Memento" and "Flyweight" store.
+// It only stores cells that have tokens (spawned or crafted).
+let gridCells = new Map<string, number>();
 const cellVisuals = new Map<string, leaflet.Layer>();
 
 // Player's cell coordinate (i, j)
@@ -115,6 +120,7 @@ function updateStatusPanel() {
   }</strong>`;
 }
 
+// This function ONLY removes the visual layer
 function removeCell(key: string) {
   const visual = cellVisuals.get(key);
   if (visual) {
@@ -201,7 +207,7 @@ function onCellClick(key: string, i: number, j: number) {
 /**
  * Main update loop.
  * Called on 'moveend' (pan or scroll).
- * Despawns off-screen cells and spawns new ones.
+ * Despawns off-screen visuals and spawns/restores cells in view.
  */
 function updateMap() {
   const bounds = map.getBounds();
@@ -212,38 +218,47 @@ function updateMap() {
   const jMin = Math.floor(bounds.getWest() / TILE_DEGREES);
   const jMax = Math.ceil(bounds.getEast() / TILE_DEGREES);
 
-  // 2. Despawn (Memoryless): Remove cells *outside* this exact range
+  // 2. Despawn VISUALS (but not data)
   const keysToRemove: string[] = [];
   for (const key of cellVisuals.keys()) {
     const [iStr, jStr] = key.split(",");
     const i = parseInt(iStr);
     const j = parseInt(jStr);
 
-    // If the cell's (i, j) is outside the visible range, delete it
     if (i < iMin || i > iMax || j < jMin || j > jMax) {
       keysToRemove.push(key);
     }
   }
-  // Now, safely remove them
+  // Now, safely remove them (this just removes the visual layer)
   for (const key of keysToRemove) {
-    gridCells.delete(key);
     removeCell(key);
   }
 
-  // 3. Spawn: Add new cells *inside* this exact range
+  // 3. Spawn / Re-render cells *inside* this exact range
   for (let i = iMin; i <= iMax; i++) {
     for (let j = jMin; j <= jMax; j++) {
       const key = `${i},${j}`;
 
-      // Skip if this cell already exists (e.g., our "2" token)
-      if (gridCells.has(key)) {
+      // Skip if this cell's VISUAL is already drawn
+      if (cellVisuals.has(key)) {
         continue;
       }
 
-      // Use luck to determine if a token spawns here
-      if (luck(key) < SPAWN_PROBABILITY) {
-        gridCells.set(key, 1);
-        renderCell(key, i, j, 1);
+      // Check if this cell has saved state (Memento)
+      let value = gridCells.get(key);
+
+      if (value === undefined) {
+        // No saved state. Check if it should spawn (Flyweight)
+        // We run luck() once and store the result
+        if (luck(key) < SPAWN_PROBABILITY) {
+          value = 1;
+          gridCells.set(key, 1); // Store its state
+        }
+      }
+
+      // If we have a value (either from Memento or new spawn), render it
+      if (value !== undefined) {
+        renderCell(key, i, j, value);
       }
     }
   }
@@ -262,6 +277,58 @@ function movePlayer(di: number, dj: number) {
   playerMarker.setLatLng(playerCenter);
   map.panTo(playerCenter);
   // `updateMap()` will be called automatically by the 'moveend' event
+}
+
+// ===
+// SAVE / LOAD LOGIC
+// ===
+
+interface SaveState {
+  playerI: number;
+  playerJ: number;
+  playerInventory: number | null;
+  gridCellEntries: [string, number][];
+}
+
+function saveGame() {
+  const saveState: SaveState = {
+    playerI: playerI,
+    playerJ: playerJ,
+    playerInventory: playerInventory,
+    gridCellEntries: Array.from(gridCells.entries()),
+  };
+
+  localStorage.setItem(SAVE_KEY, JSON.stringify(saveState));
+  alert("Game Saved!");
+}
+
+function loadGame(): boolean {
+  const json = localStorage.getItem(SAVE_KEY);
+  if (!json) {
+    console.log("No save file found.");
+    return false; // No save file
+  }
+
+  try {
+    const saveState: SaveState = JSON.parse(json);
+    playerI = saveState.playerI;
+    playerJ = saveState.playerJ;
+    playerInventory = saveState.playerInventory;
+    gridCells = new Map(saveState.gridCellEntries);
+
+    console.log("Game Loaded!");
+    return true; // Load successful
+  } catch (e) {
+    console.error("Error loading save file:", e);
+    return false; // Load failed
+  }
+}
+
+function resetGame() {
+  if (confirm("Are you sure you want to reset your progress?")) {
+    localStorage.removeItem(SAVE_KEY);
+    window.location.reload();
+  }
 }
 
 // ===
@@ -285,11 +352,32 @@ const westBtn = document.createElement("button");
 westBtn.innerHTML = "West";
 westBtn.onclick = () => movePlayer(0, -1);
 
-controlPanelDiv.append(northBtn, southBtn, eastBtn, westBtn);
+// Add Save/Reset buttons
+const saveBtn = document.createElement("button");
+saveBtn.innerHTML = "Save";
+saveBtn.onclick = saveGame;
+
+const resetBtn = document.createElement("button");
+resetBtn.innerHTML = "Reset";
+resetBtn.onclick = resetGame;
+
+controlPanelDiv.append(northBtn, southBtn, eastBtn, westBtn, saveBtn, resetBtn);
 
 // Listen for map moves (pan, scroll, zoom) to update cells
 map.on("moveend", updateMap);
 
-// Initial setup
-updateStatusPanel();
-updateMap(); // Draw the first set of cells
+// --- Main Initialization ---
+
+// Try to load game state
+const loaded = loadGame();
+
+if (loaded) {
+  // If load successful, move map to player's saved position
+  const playerCenter = cellToBounds(playerI, playerJ).getCenter();
+  playerMarker.setLatLng(playerCenter);
+  map.setView(playerCenter, GAMEPLAY_ZOOM_LEVEL); // Use setView for instant move
+}
+// If no save, map defaults to CLASSROOM_LATLNG (set during map creation)
+
+updateStatusPanel(); // Show loaded (or new) inventory
+updateMap(); // Draw cells (either loaded or new)
