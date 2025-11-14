@@ -327,7 +327,7 @@ function loadGame(): boolean {
 function resetGame() {
   if (confirm("Are you sure you want to reset your progress?")) {
     localStorage.removeItem(SAVE_KEY);
-    window.location.reload();
+    globalThis.location.reload();
   }
 }
 
