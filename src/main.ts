@@ -11,9 +11,8 @@ import "./_leafletWorkaround.ts";
 // Import our luck function
 import luck from "./_luck.ts";
 
-// ===
 // DOM SETUP
-// ===
+
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
 document.body.append(controlPanelDiv);
@@ -26,17 +25,16 @@ const statusPanelDiv = document.createElement("div");
 statusPanelDiv.id = "statusPanel";
 document.body.append(statusPanelDiv);
 
-// ===
 // CONSTANTS
-// ===
+
 const CLASSROOM_LATLNG = leaflet.latLng(
   36.997936938057016,
   -122.05703507501151,
 );
 const GAMEPLAY_ZOOM_LEVEL = 19;
-const TILE_DEGREES = 1e-4; // Approx 10m x 10m
-const INTERACTION_RADIUS = 3; // Can interact 3 cells away
-const SPAWN_PROBABILITY = 0.2; // 20% chance for a cell to have a token
+const TILE_DEGREES = 1e-4;
+const INTERACTION_RADIUS = 3;
+const SPAWN_PROBABILITY = 0.2;
 const WIN_SCORE = 32;
 const SAVE_KEY = "tokenCrafterSave";
 
@@ -49,33 +47,21 @@ const map = leaflet.map(mapDiv, {
 });
 
 leaflet
-  .tileLayer(
-    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    {
-      maxZoom: 19,
-      attribution:
-        '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    },
-  )
+  .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution:
+      '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  })
   .addTo(map);
 
-// ===
 // HELPER FUNCTIONS (COORDINATES)
-// ===
 
-/**
- * Converts a Leaflet LatLng object to its corresponding cell (i, j) coordinates.
- * Anchored at (0, 0) (Null Island).
- */
 function latLngToCell(latLng: leaflet.LatLng) {
   const i = Math.floor(latLng.lat / TILE_DEGREES);
   const j = Math.floor(latLng.lng / TILE_DEGREES);
   return { i, j };
 }
 
-/**
- * Converts cell (i, j) coordinates to Leaflet LatLngBounds.
- */
 function cellToBounds(i: number, j: number) {
   const south = i * TILE_DEGREES;
   const west = j * TILE_DEGREES;
@@ -84,29 +70,22 @@ function cellToBounds(i: number, j: number) {
   return leaflet.latLngBounds([south, west], [north, east]);
 }
 
-// ===
 // GAME STATE
-// ===
+
 let playerInventory: number | null = null;
 let gameWon = false;
-// `gridCells` is our "Memento" and "Flyweight" store.
-// It only stores cells that have tokens (spawned or crafted).
 let gridCells = new Map<string, number>();
 const cellVisuals = new Map<string, leaflet.Layer>();
 
-// Player's cell coordinate (i, j)
 const initialPlayerCell = latLngToCell(CLASSROOM_LATLNG);
 let playerI = initialPlayerCell.i;
 let playerJ = initialPlayerCell.j;
 
-// Player marker (visual only)
 const playerMarker = leaflet.marker(CLASSROOM_LATLNG).addTo(map).bindTooltip(
   "You are here!",
 );
 
-// ===
 // HELPER FUNCTIONS (GAME)
-// ===
 
 function updateStatusPanel() {
   if (gameWon) {
@@ -120,7 +99,6 @@ function updateStatusPanel() {
   }</strong>`;
 }
 
-// This function ONLY removes the visual layer
 function removeCell(key: string) {
   const visual = cellVisuals.get(key);
   if (visual) {
@@ -130,9 +108,7 @@ function removeCell(key: string) {
 }
 
 function renderCell(key: string, i: number, j: number, value: number) {
-  // Use the global coordinate helper
   const bounds = cellToBounds(i, j);
-
   const rect = leaflet.rectangle(bounds, {
     color: "#3388ff",
     weight: 1,
@@ -150,15 +126,11 @@ function renderCell(key: string, i: number, j: number, value: number) {
   cellVisuals.set(key, rect);
 }
 
-// ===
 // GAME LOGIC
-// ===
 
-/** Handles all logic when a player clicks a cell. */
 function onCellClick(key: string, i: number, j: number) {
   if (gameWon) return;
 
-  // 1. Check for interaction radius (relative to player's i,j)
   const distI = Math.abs(i - playerI);
   const distJ = Math.abs(j - playerJ);
   if (Math.max(distI, distJ) > INTERACTION_RADIUS) {
@@ -168,25 +140,20 @@ function onCellClick(key: string, i: number, j: number) {
 
   const cellValue = gridCells.get(key);
 
-  // Case 1: Inventory is EMPTY
   if (playerInventory === null) {
     if (cellValue) {
       playerInventory = cellValue;
       gridCells.delete(key);
       removeCell(key);
     }
-  } // Case 2: Inventory has a token
-  else {
+  } else {
     if (cellValue) {
-      // Cell has a token: Try to CRAFT
       if (cellValue === playerInventory) {
         const newValue = cellValue * 2;
-        playerInventory = null; // Empty inventory
-
-        removeCell(key); // Remove old visual
-        gridCells.set(key, newValue); // Set new state
-        renderCell(key, i, j, newValue); // Render new visual
-
+        playerInventory = null;
+        removeCell(key);
+        gridCells.set(key, newValue);
+        renderCell(key, i, j, newValue);
         if (newValue >= WIN_SCORE) {
           gameWon = true;
           alert(`You crafted a ${newValue} token! You win!`);
@@ -195,7 +162,6 @@ function onCellClick(key: string, i: number, j: number) {
         alert("You must combine tokens of the same value.");
       }
     } else {
-      // Cell is empty: PLACE token
       gridCells.set(key, playerInventory);
       renderCell(key, i, j, playerInventory);
       playerInventory = null;
@@ -204,59 +170,38 @@ function onCellClick(key: string, i: number, j: number) {
   updateStatusPanel();
 }
 
-/**
- * Main update loop.
- * Called on 'moveend' (pan or scroll).
- * Despawns off-screen visuals and spawns/restores cells in view.
- */
 function updateMap() {
   const bounds = map.getBounds();
-
-  // 1. Calculate the *exact* range of visible cells
   const iMin = Math.floor(bounds.getSouth() / TILE_DEGREES);
   const iMax = Math.ceil(bounds.getNorth() / TILE_DEGREES);
   const jMin = Math.floor(bounds.getWest() / TILE_DEGREES);
   const jMax = Math.ceil(bounds.getEast() / TILE_DEGREES);
 
-  // 2. Despawn VISUALS (but not data)
   const keysToRemove: string[] = [];
   for (const key of cellVisuals.keys()) {
     const [iStr, jStr] = key.split(",");
     const i = parseInt(iStr);
     const j = parseInt(jStr);
-
     if (i < iMin || i > iMax || j < jMin || j > jMax) {
       keysToRemove.push(key);
     }
   }
-  // Now, safely remove them (this just removes the visual layer)
   for (const key of keysToRemove) {
     removeCell(key);
   }
 
-  // 3. Spawn / Re-render cells *inside* this exact range
   for (let i = iMin; i <= iMax; i++) {
     for (let j = jMin; j <= jMax; j++) {
       const key = `${i},${j}`;
+      if (cellVisuals.has(key)) continue;
 
-      // Skip if this cell's VISUAL is already drawn
-      if (cellVisuals.has(key)) {
-        continue;
-      }
-
-      // Check if this cell has saved state (Memento)
       let value = gridCells.get(key);
-
       if (value === undefined) {
-        // No saved state. Check if it should spawn (Flyweight)
-        // We run luck() once and store the result
         if (luck(key) < SPAWN_PROBABILITY) {
           value = 1;
-          gridCells.set(key, 1); // Store its state
+          gridCells.set(key, 1);
         }
       }
-
-      // If we have a value (either from Memento or new spawn), render it
       if (value !== undefined) {
         renderCell(key, i, j, value);
       }
@@ -264,19 +209,81 @@ function updateMap() {
   }
 }
 
-/**
- * Handles player movement, updating state and panning the map.
- */
-function movePlayer(di: number, dj: number) {
+function updatePlayerPosition(lat: number, lng: number) {
   if (gameWon) return;
 
-  playerI += di;
-  playerJ += dj;
+  const newCell = latLngToCell(leaflet.latLng(lat, lng));
+  playerI = newCell.i;
+  playerJ = newCell.j;
 
   const playerCenter = cellToBounds(playerI, playerJ).getCenter();
   playerMarker.setLatLng(playerCenter);
-  map.panTo(playerCenter);
-  // `updateMap()` will be called automatically by the 'moveend' event
+  map.panTo(playerCenter); // updateMap will be triggered by the move event
+}
+
+function movePlayerManual(di: number, dj: number) {
+  const playerCenter = cellToBounds(playerI, playerJ).getCenter();
+  const newLat = playerCenter.lat + di * TILE_DEGREES;
+  const newLng = playerCenter.lng + dj * TILE_DEGREES;
+  updatePlayerPosition(newLat, newLng);
+}
+
+// GEOLOCATION FACADE
+
+const locationService = {
+  watchId: null as number | null,
+
+  start(onUpdate: (lat: number, lng: number) => void) {
+    if ("geolocation" in navigator) {
+      this.watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          onUpdate(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => console.error("GPS Error:", error),
+        { enableHighAccuracy: true },
+      );
+    } else {
+      alert("Geolocation is not available in this browser.");
+    }
+  },
+
+  stop() {
+    if (this.watchId !== null) {
+      navigator.geolocation.clearWatch(this.watchId);
+      this.watchId = null;
+    }
+  },
+};
+
+let isGeolocationActive = false;
+
+function toggleGeolocation() {
+  if (isGeolocationActive) {
+    // Turn GPS OFF
+    locationService.stop();
+    isGeolocationActive = false;
+    sensorBtn.innerHTML = "📍 GPS: OFF";
+    sensorBtn.classList.remove("active");
+    // Re-enable manual buttons
+    northBtn.disabled = false;
+    southBtn.disabled = false;
+    eastBtn.disabled = false;
+    westBtn.disabled = false;
+  } else {
+    // Turn GPS ON
+    isGeolocationActive = true;
+    sensorBtn.innerHTML = "📍 GPS: ON";
+    sensorBtn.classList.add("active");
+    // Disable manual buttons
+    northBtn.disabled = true;
+    southBtn.disabled = true;
+    eastBtn.disabled = true;
+    westBtn.disabled = true;
+
+    locationService.start((lat, lng) => {
+      updatePlayerPosition(lat, lng);
+    });
+  }
 }
 
 // ===
@@ -288,6 +295,7 @@ interface SaveState {
   playerJ: number;
   playerInventory: number | null;
   gridCellEntries: [string, number][];
+  isGeolocationActive: boolean; // Added GPS state to save
 }
 
 function saveGame() {
@@ -296,18 +304,15 @@ function saveGame() {
     playerJ: playerJ,
     playerInventory: playerInventory,
     gridCellEntries: Array.from(gridCells.entries()),
+    isGeolocationActive: isGeolocationActive,
   };
-
   localStorage.setItem(SAVE_KEY, JSON.stringify(saveState));
   alert("Game Saved!");
 }
 
 function loadGame(): boolean {
   const json = localStorage.getItem(SAVE_KEY);
-  if (!json) {
-    console.log("No save file found.");
-    return false; // No save file
-  }
+  if (!json) return false;
 
   try {
     const saveState: SaveState = JSON.parse(json);
@@ -316,11 +321,16 @@ function loadGame(): boolean {
     playerInventory = saveState.playerInventory;
     gridCells = new Map(saveState.gridCellEntries);
 
+    // Restore geolocation state if it was active
+    if (saveState.isGeolocationActive) {
+      toggleGeolocation();
+    }
+
     console.log("Game Loaded!");
-    return true; // Load successful
+    return true;
   } catch (e) {
     console.error("Error loading save file:", e);
-    return false; // Load failed
+    return false;
   }
 }
 
@@ -338,19 +348,31 @@ function resetGame() {
 // Add movement buttons
 const northBtn = document.createElement("button");
 northBtn.innerHTML = "North";
-northBtn.onclick = () => movePlayer(1, 0);
+northBtn.onclick = () => movePlayerManual(1, 0);
 
 const southBtn = document.createElement("button");
 southBtn.innerHTML = "South";
-southBtn.onclick = () => movePlayer(-1, 0);
+southBtn.onclick = () => movePlayerManual(-1, 0);
 
 const eastBtn = document.createElement("button");
 eastBtn.innerHTML = "East";
-eastBtn.onclick = () => movePlayer(0, 1);
+eastBtn.onclick = () => movePlayerManual(0, 1);
 
 const westBtn = document.createElement("button");
 westBtn.innerHTML = "West";
-westBtn.onclick = () => movePlayer(0, -1);
+westBtn.onclick = () => movePlayerManual(0, -1);
+
+// GPS Toggle Button
+const sensorBtn = document.createElement("button");
+sensorBtn.innerHTML = "📍 GPS: OFF";
+sensorBtn.onclick = toggleGeolocation;
+// Simple style for active button
+const style = document.createElement("style");
+style.innerHTML = `
+  .active { background-color: #4CAF50; color: white; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+`;
+document.head.appendChild(style);
 
 // Add Save/Reset buttons
 const saveBtn = document.createElement("button");
@@ -361,23 +383,32 @@ const resetBtn = document.createElement("button");
 resetBtn.innerHTML = "Reset";
 resetBtn.onclick = resetGame;
 
-controlPanelDiv.append(northBtn, southBtn, eastBtn, westBtn, saveBtn, resetBtn);
+controlPanelDiv.append(
+  northBtn,
+  southBtn,
+  eastBtn,
+  westBtn,
+  sensorBtn,
+  saveBtn,
+  resetBtn,
+);
 
-// Listen for map moves (pan, scroll, zoom) to update cells
+// Listen for map moves
 map.on("moveend", updateMap);
 
-// --- Main Initialization ---
+// Check URL param to auto-enable GPS (Assignment req)
+const urlParams = new URLSearchParams(globalThis.location.search);
+if (urlParams.get("movement") === "geolocation") {
+  toggleGeolocation();
+}
 
-// Try to load game state
 const loaded = loadGame();
 
 if (loaded) {
-  // If load successful, move map to player's saved position
   const playerCenter = cellToBounds(playerI, playerJ).getCenter();
   playerMarker.setLatLng(playerCenter);
-  map.setView(playerCenter, GAMEPLAY_ZOOM_LEVEL); // Use setView for instant move
+  map.setView(playerCenter, GAMEPLAY_ZOOM_LEVEL);
 }
-// If no save, map defaults to CLASSROOM_LATLNG (set during map creation)
 
-updateStatusPanel(); // Show loaded (or new) inventory
-updateMap(); // Draw cells (either loaded or new)
+updateStatusPanel();
+updateMap();

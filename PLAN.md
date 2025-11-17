@@ -61,7 +61,7 @@ Key technical challenge: Refactor the coordinate system to be global and dynamic
 - [x] Update click logic to check distance from playerI/J
 - [x] Increase win score to 32
 - [x] push and check GitHub Pages deployment
-- [x] make final commit "(D3.b complete)"
+- [x] make final commit
 
 ## D3.c: Object persistence
 
@@ -79,4 +79,26 @@ Key technical challenge: Make cells "remember" their state (like crafted tokens)
 - [x] Test: Craft a 4, scroll far away, scroll back, and confirm the 4 is still there.
 - [x] do a cleanup-only commit
 - [x] push and check GitHub Pages deployment
-- [x] make final commit "(D3.c complete)"
+- [x] make final commit
+
+## D3.d: Gameplay Across Real-world Space and Time
+
+Key technical challenge: Implement data persistence using LocalStorage and real-world movement using the Geolocation API (hidden behind a Facade pattern).
+
+### steps
+
+    - [x] Add a "Save" button to the `controlPanel`.
+    - [x] Add a "Reset" button to clear the save file.
+    - [x] Implement `saveGame()` to serialize player position, inventory, and grid state to `localStorage`.
+    - [x] Implement `loadGame()` to restore state on page load.
+    - [x] Restore the map view to the saved player position.
+    - [x] Create a location service object (Facade) to abstract `navigator.geolocation`.
+    - [x] Create a `toggleGeolocation()` function to switch between Button and GPS modes.
+    - [x] Add a button to the UI to trigger the toggle.
+    - [x] Implement `navigator.geolocation.watchPosition` to get real-world coords.
+    - [x] When GPS updates, convert lat/lng to `i,j`, update player state, and recenter map.
+    - [x] Save the geolocation mode (active/inactive) in `localStorage` so it persists.
+    - [x] Check URL query params for `?movement=geolocation` to auto-enable.
+    - [x] do a cleanup-only commit
+    - [x] push and check GitHub Pages deployment
+    - [ ] make final commit 
