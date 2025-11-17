@@ -101,4 +101,4 @@ Key technical challenge: Implement data persistence using LocalStorage and real-
     - [x] Check URL query params for `?movement=geolocation` to auto-enable.
     - [x] do a cleanup-only commit
     - [x] push and check GitHub Pages deployment
-    - [ ] make final commit 
+    - [ ] make final commit
